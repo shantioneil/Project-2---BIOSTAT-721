@@ -1,0 +1,132 @@
+---
+title: "Project 2"
+author: "Shanti O'Neil"
+date: "2025-11-11"
+output: word_document
+  toc: true
+---
+
+```{r setup, include=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r, include = FALSE}
+# Read in data
+aq2018 <- read.csv("AQ_2018.csv")
+aq2019 <- read.csv("AQ_2019.csv")
+aq2020 <- read.csv("AQ_2020.csv")
+
+# Function to clean data
+
+data_process <- function(x) {
+  # Create vector of variables
+  variables <- c("Date", 
+                 "Daily.Max.8.hour.CO.Concentration",
+                 "units_CO",
+                 "Daily.Mean.PM2.5.Concentration",
+                 "units_PM",
+                 "Daily.Max.8.hour.Ozone.Concentration",
+                 "units_O3"
+                 )
+  
+  # Rename pollutant concentration variables
+  x <- x %>% 
+    dplyr::rename("max_CO" = "Daily.Max.8.hour.CO.Concentration",
+                  "mean_PM2.5" = "Daily.Mean.PM2.5.Concentration",
+                  "max_Ozone" = "Daily.Max.8.hour.Ozone.Concentration")
+  
+  # Format data variable
+  x$Date_clean <- mdy(x$Date)
+  
+  # Calculate average of repeat measurements for single pollutants
+  # And remove duplicate rows
+  # First keeps the first value for the units and date variables when the data
+    #is collapsed to only one row per date
+  x <- x %>% 
+    group_by(Date_clean) %>% 
+    summarize(Date=first(Date),
+              max_CO= mean(max_CO, na.rm = TRUE),
+              units_CO = first(units_CO),
+              mean_PM2.5= mean(mean_PM2.5, na.rm = TRUE),
+              units_PM = first(units_PM),
+              max_Ozone= mean(max_Ozone, na.rm = TRUE),
+              units_O3 = first(units_O3))
+
+  # Set negative measurements to zero
+  x[,c(2,4,6)] <- apply(x[,c(2,4,6)], 2, function(y) {
+    y[y < 0] <- 0          
+    return(y)
+  })
+  return(x)
+}
+
+# Run function on the datasets
+aq2018_clean <- data_process(aq2018)
+aq2019_clean <- data_process(aq2019)
+aq2020_clean <- data_process(aq2020)
+
+# Combine datasets
+data <- rbind(aq2018_clean, aq2019_clean, aq2020_clean)
+```
+
+# Plot 1
+```{r}
+# Create new month from date variable
+data$month <- month(data$Date_clean)
+
+plot1 <- data %>% 
+  # Create a variable for pollutant and combine the values of CO and O3
+  mutate(across(everything())) %>% 
+  pivot_longer(cols = c(max_CO, max_Ozone),
+               names_to = "pollutant",
+               values_to = "pollutant_max") %>% 
+  # Calculate the mean and standard error for the values of CO and O3
+  group_by(month, pollutant) %>% 
+  summarise(month = first(month),
+            n = sum(!is.na(pollutant_max)),
+            mean = mean(pollutant_max, na.rm = TRUE),
+            sd = sd(pollutant_max, na.rm = TRUE),
+            se = qt(0.975, df = n - 1) * sd/sqrt(n))
+
+      
+# Create Plot
+ggplot(plot1, aes(x = month, y = mean, color = pollutant)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se)) +
+ # scale_y_continuous(
+  #  breaks = seq(0.01, 2, by = 0.1)) +
+  scale_x_continuous(
+    breaks = c(1:12))
+```
+
+# Plot 2
+```{r}
+# Create new year from date variable
+data$year <- year(data$Date_clean)
+
+#Make year a factor
+data$year <- as.character(data$year)
+
+plot2 <- data %>% 
+  # Calculate the mean and standard error for the values of CO and O3
+  group_by(month, year) %>% 
+  summarise(month = first(month),
+            year = first(year),
+            mean = mean(mean_PM2.5, na.rm = TRUE))
+
+
+ggplot(plot2, aes(x = month, y = mean, color = year)) +
+  geom_point() +
+  geom_line() +
+  facet_grid(year ~ .) +
+  scale_x_continuous(
+    breaks = c(1:12))
+```
+
+
+
+
+
