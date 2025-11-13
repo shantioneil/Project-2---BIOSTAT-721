@@ -2,8 +2,9 @@
 title: "Project 2"
 author: "Shanti O'Neil"
 date: "2025-11-11"
-output: word_document
-  toc: true
+output: 
+  word_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE, message = FALSE}
@@ -11,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
+library(nationalparkcolors)
 ```
 
 ```{r, include = FALSE}
@@ -73,60 +75,61 @@ data <- rbind(aq2018_clean, aq2019_clean, aq2020_clean)
 ```
 
 # Plot 1
-```{r}
+```{r, echo = FALSE, message = FALSE}
 # Create new month from date variable
-data$month <- month(data$Date_clean)
+data$Month <- month(data$Date_clean, label = TRUE)
 
 plot1 <- data %>% 
   # Create a variable for pollutant and combine the values of CO and O3
   mutate(across(everything())) %>% 
   pivot_longer(cols = c(max_CO, max_Ozone),
-               names_to = "pollutant",
+               names_to = "Pollutant",
                values_to = "pollutant_max") %>% 
   # Calculate the mean and standard error for the values of CO and O3
-  group_by(month, pollutant) %>% 
-  summarise(month = first(month),
+  group_by(Month, Pollutant) %>% 
+  summarise(Month = first(Month),
             n = sum(!is.na(pollutant_max)),
             mean = mean(pollutant_max, na.rm = TRUE),
             sd = sd(pollutant_max, na.rm = TRUE),
             se = qt(0.975, df = n - 1) * sd/sqrt(n))
-
       
 # Create Plot
-ggplot(plot1, aes(x = month, y = mean, color = pollutant)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = mean - se, ymax = mean + se)) +
- # scale_y_continuous(
-  #  breaks = seq(0.01, 2, by = 0.1)) +
-  scale_x_continuous(
-    breaks = c(1:12))
+
+col <- c("#339966", "#993333")
+  
+ggplot(plot1, aes(x = Month, y = mean, color = Pollutant)) +
+  geom_point(size = 1.75) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = .3) +
+  ylab("Mean (ppm)") +
+  ggtitle("Mean Pollutant Concentration by Month") +
+  scale_color_discrete(labels = c("CO", "O3"), palette = col) +
+  theme_minimal(paper = "#FFFFF9") 
 ```
 
 # Plot 2
-```{r}
+```{r, echo = FALSE, message = FALSE}
 # Create new year from date variable
-data$year <- year(data$Date_clean)
+data$Year <- year(data$Date_clean)
 
 #Make year a factor
-data$year <- as.character(data$year)
+data$Year <- as.character(data$Year)
 
 plot2 <- data %>% 
   # Calculate the mean and standard error for the values of CO and O3
-  group_by(month, year) %>% 
-  summarise(month = first(month),
-            year = first(year),
+  group_by(Month, Year) %>% 
+  summarise(month = first(Month),
+            Year = first(Year),
             mean = mean(mean_PM2.5, na.rm = TRUE))
 
+col2 <- park_palette("Badlands", 3)
 
-ggplot(plot2, aes(x = month, y = mean, color = year)) +
-  geom_point() +
+ggplot(plot2, aes(x = Month, y = mean, group = Year, color = Year)) +
+  geom_point(size = 1.75) +
   geom_line() +
-  facet_grid(year ~ .) +
-  scale_x_continuous(
-    breaks = c(1:12))
+  ggtitle("Mean PM 2.5 Concentration by Month") +
+  ylab("Mean (ug/m3 LC)") +
+  facet_grid(Year ~ .) +
+  theme_classic(paper = "#FFFFF9") +
+  theme(legend.position="none") +
+  scale_color_manual(values = col2)
 ```
-
-
-
-
-
