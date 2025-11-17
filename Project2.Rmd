@@ -21,45 +21,47 @@ aq2018 <- read.csv("AQ_2018.csv")
 aq2019 <- read.csv("AQ_2019.csv")
 aq2020 <- read.csv("AQ_2020.csv")
 
-# Function to clean data
+# Create function to clean datasets
 
 data_process <- function(x) {
   # Create vector of variables
-  variables <- c("Date", 
-                 "Daily.Max.8.hour.CO.Concentration",
-                 "units_CO",
-                 "Daily.Mean.PM2.5.Concentration",
-                 "units_PM",
-                 "Daily.Max.8.hour.Ozone.Concentration",
-                 "units_O3"
-                 )
-  
-  # Rename pollutant concentration variables
-  x <- x %>% 
-    dplyr::rename("max_CO" = "Daily.Max.8.hour.CO.Concentration",
-                  "mean_PM2.5" = "Daily.Mean.PM2.5.Concentration",
-                  "max_Ozone" = "Daily.Max.8.hour.Ozone.Concentration")
-  
-  # Format data variable
+  variables <- c(
+    "Date",
+    "Daily.Max.8.hour.CO.Concentration",
+    "units_CO",
+    "Daily.Mean.PM2.5.Concentration",
+    "units_PM",
+    "Daily.Max.8.hour.Ozone.Concentration",
+    "units_O3"
+  )
+  # Rename pollutant variables
+  x <- x %>%
+    rename(
+      "max_CO" = "Daily.Max.8.hour.CO.Concentration",
+      "mean_PM2.5" = "Daily.Mean.PM2.5.Concentration",
+      "max_Ozone" = "Daily.Max.8.hour.Ozone.Concentration"
+    )
+  # Format date variable using tidyverse
   x$Date_clean <- mdy(x$Date)
-  
-  # Calculate average of repeat measurements for single pollutants
-  # And remove duplicate rows
+  # Calculate average of repeat measurements by date for pollutants
+  # Remove duplicates rows for dates
   # First keeps the first value for the units and date variables when the data
-    #is collapsed to only one row per date
-  x <- x %>% 
-    group_by(Date_clean) %>% 
-    summarize(Date=first(Date),
-              max_CO= mean(max_CO, na.rm = TRUE),
-              units_CO = first(units_CO),
-              mean_PM2.5= mean(mean_PM2.5, na.rm = TRUE),
-              units_PM = first(units_PM),
-              max_Ozone= mean(max_Ozone, na.rm = TRUE),
-              units_O3 = first(units_O3))
+     # is collapsed to only one row per date
+  x <- x %>%
+    group_by(Date_clean) %>%
+    summarize(
+      Date = first(Date),
+      max_CO = mean(max_CO, na.rm = TRUE),
+      units_CO = first(units_CO),
+      mean_PM2.5 = mean(mean_PM2.5, na.rm = TRUE),
+      units_PM = first(units_PM),
+      max_Ozone = mean(max_Ozone, na.rm = TRUE),
+      units_O3 = first(units_O3)
+    )
 
-  # Set negative measurements to zero
-  x[,c(2,4,6)] <- apply(x[,c(2,4,6)], 2, function(y) {
-    y[y < 0] <- 0          
+  # Set negative pollutant measurements to zero
+  x[, c(2, 4, 6)] <- apply(x[, c(2, 4, 6)], 2, function(y) {
+    y[y < 0] <- 0
     return(y)
   })
   return(x)
@@ -76,34 +78,42 @@ data <- rbind(aq2018_clean, aq2019_clean, aq2020_clean)
 
 # Plot 1
 ```{r, echo = FALSE, message = FALSE}
-# Create new month from date variable
+# Create new month variable from date variable
 data$Month <- month(data$Date_clean, label = TRUE)
 
-plot1 <- data %>% 
-  # Create a variable for pollutant and combine the values of CO and O3
-  mutate(across(everything())) %>% 
-  pivot_longer(cols = c(max_CO, max_Ozone),
-               names_to = "Pollutant",
-               values_to = "pollutant_max") %>% 
-  # Calculate the mean and standard error for the values of CO and O3
-  group_by(Month, Pollutant) %>% 
-  summarise(Month = first(Month),
-            n = sum(!is.na(pollutant_max)),
-            mean = mean(pollutant_max, na.rm = TRUE),
-            sd = sd(pollutant_max, na.rm = TRUE),
-            se = qt(0.975, df = n - 1) * sd/sqrt(n))
-      
-# Create Plot
+# Create data frame for plot 1
+plot1 <- data %>%
+  # Create a variable for pollutant type and combine the values of CO and O3
+  mutate(across(everything())) %>%
+  pivot_longer(
+    cols = c(max_CO, max_Ozone),
+    names_to = "Pollutant",
+    values_to = "pollutant_max"
+  ) %>%
+  # Calculate the mean and standard error for the pollutants
+  group_by(Month, Pollutant) %>%
+  summarise(
+    Month = first(Month),
+    n = sum(!is.na(pollutant_max)),
+    mean = mean(pollutant_max, na.rm = TRUE),
+    sd = sd(pollutant_max, na.rm = TRUE),
+    se = qt(0.975, df = n - 1) * sd / sqrt(n)
+  )
 
+# Create a vector of the colors to differentiate pollutants
 col <- c("#339966", "#993333")
-  
+
+# Create Plot 1 including points and error bars per mean
 ggplot(plot1, aes(x = Month, y = mean, color = Pollutant)) +
   geom_point(size = 1.75) +
   geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = .3) +
+  # Label the y-axis
   ylab("Mean (ppm)") +
+  # Title the graph
   ggtitle("Mean Pollutant Concentration by Month") +
+  # Set colors and label the pollutants in the legend
   scale_color_discrete(labels = c("CO", "O3"), palette = col) +
-  theme_minimal(paper = "#FFFFF9") 
+  theme_minimal(paper = "#FFFFF9")
 ```
 
 # Plot 2
@@ -111,25 +121,45 @@ ggplot(plot1, aes(x = Month, y = mean, color = Pollutant)) +
 # Create new year from date variable
 data$Year <- year(data$Date_clean)
 
-#Make year a factor
+# Make year a factor
 data$Year <- as.character(data$Year)
 
-plot2 <- data %>% 
-  # Calculate the mean and standard error for the values of CO and O3
-  group_by(Month, Year) %>% 
-  summarise(month = first(Month),
-            Year = first(Year),
-            mean = mean(mean_PM2.5, na.rm = TRUE))
+# Create data frame for plot 2
+plot2 <- data %>%
+  # Calculate the mean and standard error for PM2.5
+  group_by(Month, Year) %>%
+  summarise(
+    month = first(Month),
+    Year = first(Year),
+    mean = mean(mean_PM2.5, na.rm = TRUE)
+  )
 
+# Create a vector of the colors to differentiate years
 col2 <- park_palette("Badlands", 3)
 
+# Create plot 2
+# Include points to represent the means per month and lines to connect them
+# Group the lines by year and color by year
 ggplot(plot2, aes(x = Month, y = mean, group = Year, color = Year)) +
   geom_point(size = 1.75) +
   geom_line() +
-  ggtitle("Mean PM 2.5 Concentration by Month") +
+  # Title the plot
+  ggtitle("Mean PM2.5 Concentration by Month") +
+  # Label the y-axis
   ylab("Mean (ug/m3 LC)") +
+  # Set the y-axis scale
+  scale_y_continuous(
+    limits = c(4, 11),
+    breaks = seq(from = 4, to = 11, by = 2)
+  ) +
+  # Separate/facet the plots by year
   facet_grid(Year ~ .) +
-  theme_classic(paper = "#FFFFF9") +
-  theme(legend.position="none") +
+  # Set the colors and remove the legend
+  theme_minimal(paper = "#FFFFF9") +
+  theme(legend.position = "none") +
   scale_color_manual(values = col2)
 ```
+
+# Github Repository Link
+
+<https://github.com/shantioneil/Project-2---BIOSTAT-721.git>
